@@ -1,0 +1,78 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 12345
+      POSTGRES_DB: novya
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend_service
+    command: sh -c "python manage.py migrate --noinput && python manage.py runserver 0.0.0.0:8000"
+    working_dir: /app
+    volumes:
+      - ./backend:/app
+    environment:
+      DB_NAME: novya
+      DB_USER: postgres
+      DB_PASSWORD: 12345
+      DB_HOST: db
+      DB_PORT: 5432
+    depends_on:
+      - db
+    ports:
+      - "8000:8000"
+    restart: always
+
+  ai_backend:
+    build:
+      context: ./backend/ai_backend
+      dockerfile: Dockerfile
+    container_name: ai_backend_service
+    command: python -m uvicorn app:app --host 0.0.0.0 --port 8001
+    working_dir: /app
+    volumes:
+      - ./backend/ai_backend:/app
+    environment:
+      DB_NAME: novya
+      DB_USER: postgres
+      DB_PASSWORD: 12345
+      DB_HOST: db
+      DB_PORT: 5432
+      OPENROUTER_API_KEY: "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"
+    depends_on:
+      - db
+    ports:
+      - "8001:8001"
+    restart: always
+
+  frontend:
+    build:
+      context: ./novya-frontend-main
+      dockerfile: Dockerfile
+    container_name: frontend_service
+    environment:
+      # Point the UI to your live backend services
+      REACT_APP_DJANGO_URL: "http://98.94.12.176:8000/api"
+      REACT_APP_FASTAPI_URL: "http://98.94.12.176:8001"
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+      - ai_backend
+    restart: always
+
+volumes:
+  db_data:
+
